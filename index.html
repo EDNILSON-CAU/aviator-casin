@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Aviator Simulador - Edição Arco-Íris</title>
+<style>
+  body {
+    margin: 0;
+    padding: 0;
+    background: linear-gradient(135deg, red, orange, yellow, green, blue, indigo, violet);
+    color: #fff;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    text-align: center;
+    overflow-x: hidden;
+  }
+  #game {
+    max-width: 480px;
+    margin: 2rem auto;
+    background: rgba(0, 0, 0, 0.4);
+    border: 4px solid white;
+    border-radius: 16px;
+    box-shadow: 0 0 30px rgba(255, 255, 255, 0.3);
+    padding: 2rem;
+    backdrop-filter: blur(8px);
+  }
+  h1 {
+    font-size: 2rem;
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+  }
+  #credits {
+    font-weight: bold;
+    font-size: 1.2rem;
+    color: yellow;
+    margin-bottom: 1rem;
+  }
+  #aviator {
+    font-size: 3.5rem;
+    font-weight: 900;
+    color: white;
+    letter-spacing: 2px;
+    position: relative;
+    height: 80px;
+  }
+  #plane {
+    position: absolute;
+    bottom: 0;
+    left: 10px;
+    width: 60px;
+    height: 60px;
+    transition: transform 0.2s ease-out;
+    filter: drop-shadow(0 0 6px yellow);
+  }
+  input[type=number] {
+    width: 100%;
+    padding: 10px;
+    border-radius: 10px;
+    border: none;
+    margin-bottom: 1rem;
+    font-size: 1rem;
+  }
+  button {
+    background: #fff;
+    color: #000;
+    font-weight: bold;
+    padding: 12px 20px;
+    border-radius: 10px;
+    margin: 0 5px 1rem;
+    border: none;
+    cursor: pointer;
+    transition: background 0.3s;
+  }
+  button:hover {
+    background: #ccc;
+  }
+  .log {
+    background: rgba(0, 0, 0, 0.4);
+    padding: 10px;
+    border-radius: 10px;
+    max-height: 120px;
+    overflow-y: auto;
+    font-size: 0.9rem;
+    text-align: left;
+  }
+  .ranking {
+    margin-top: 1.5rem;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    padding: 1rem;
+  }
+  .ranking h3 {
+    margin-bottom: 0.5rem;
+  }
+  .ranking ul {
+    list-style: none;
+    padding: 0;
+    max-height: 100px;
+    overflow-y: auto;
+    text-align: left;
+  }
+  .ranking li {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 5px 0;
+  }
+</style>
+</head>
+<body>
+<div id="game">
+  <h1>Aviator 🌈</h1>
+  <p>Créditos: <span id="credits">10000</span></p>
+  <div style="position:relative;">
+    <span id="aviator">x1.00</span>
+    <svg id="plane" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+      <path fill="#ffa726" d="M2 30 L50 12 L54 14 L20 32 L54 50 L50 52 L2 34z"/>
+      <circle fill="#fff" cx="12" cy="30" r="5"/>
+    </svg>
+  </div>
+  <input type="number" id="betAmount" placeholder="Valor da aposta" min="1" />
+  <div>
+    <button onclick="startGame()">Apostar</button>
+    <button onclick="cashOut()">Sacar</button>
+  </div>
+  <div class="log" id="log"></div>
+  <div class="ranking">
+    <h3>🏆 Histórico</h3>
+    <ul id="history"></ul>
+  </div>
+</div>
+
+<!-- Sons -->
+<audio id="bgMusic" loop>
+  <source src="https://cdn.pixabay.com/download/audio/2021/08/04/audio_9cc575d02d.mp3?filename=motivational-inspiring-corporate-ambient-11652.mp3" type="audio/mpeg">
+</audio>
+<audio id="betSound" src="https://cdn.pixabay.com/download/audio/2022/03/21/audio_7cc73b25c3.mp3?filename=button-click-2.mp3"></audio>
+<audio id="cashSound" src="https://cdn.pixabay.com/download/audio/2022/03/23/audio_0b69e6c664.mp3?filename=coins-collect-02.mp3"></audio>
+<audio id="crashSound" src="https://cdn.pixabay.com/download/audio/2022/03/22/audio_5bde7cc77a.mp3?filename=game-over-arcade-6435.mp3"></audio>
+
+<script>
+  const bgMusic = document.getElementById('bgMusic');
+  bgMusic.volume = 0.2;
+
+  let multiplier = 1.00;
+  let interval;
+  let inGame = false;
+  let crashed = false;
+  let credits = 10000;
+  let bet = 0;
+  let history = [];
+
+  const plane = document.getElementById('plane');
+  const aviatorText = document.getElementById('aviator');
+  const creditsText = document.getElementById('credits');
+  const log = document.getElementById('log');
+  const historyList = document.getElementById('history');
+  const betSound = document.getElementById('betSound');
+  const cashSound = document.getElementById('cashSound');
+  const crashSound = document.getElementById('crashSound');
+
+  function playSound(sound) {
+    sound.currentTime = 0;
+    sound.play();
+  }
+
+  function updateCredits() {
+    creditsText.textContent = credits;
+  }
+
+  function logMessage(msg) {
+    log.innerHTML = msg + '<br>' + log.innerHTML;
+  }
+
+  function updateHistory(entry) {
+    history.unshift(entry);
+    if (history.length > 10) history.pop();
+    historyList.innerHTML = history.map(h => `<li>${h}</li>`).join('');
+  }
+
+  function startGame() {
+    if (inGame) return;
+    bet = parseInt(document.getElementById('betAmount').value);
+    if (!bet || bet <= 0 || bet > credits) {
+      alert("Aposta inválida");
+      return;
+    }
+
+    if (bgMusic.paused) {
+      bgMusic.play().catch(() => {});
+    }
+
+    playSound(betSound);
+    credits -= bet;
+    updateCredits();
+
+    multiplier = 1.00;
+    crashed = false;
+    inGame = true;
+    aviatorText.textContent = 'x1.00';
+    plane.style.transform = 'translateY(0px) rotate(0deg)';
+
+    interval = setInterval(() => {
+      multiplier += 0.02;
+      aviatorText.textContent = 'x' + multiplier.toFixed(2);
+
+      let translateY = Math.max(0, 200 - multiplier * 50);
+      let rotate = 10 - multiplier * 3;
+      plane.style.transform = `translateY(-${translateY}px) rotate(${rotate}deg)`;
+
+      if (Math.random() < (0.004 * multiplier)) {
+        crash();
+      }
+    }, 100);
+  }
+
+  function crash() {
+    clearInterval(interval);
+    inGame = false;
+    crashed = true;
+    playSound(crashSound);
+    logMessage(`🚨 Crashou em x${multiplier.toFixed(2)}! Você perdeu ${bet} créditos.`);
+    updateHistory(`Crash: x${multiplier.toFixed(2)} ❌`);
+    plane.style.transform = 'translateY(60px) rotate(-45deg)';
+  }
+
+  function cashOut() {
+    if (!inGame || crashed) return;
+    clearInterval(interval);
+    let ganho = bet * multiplier;
+    credits += Math.floor(ganho);
+    updateCredits();
+    playSound(cashSound);
+    logMessage(`✅ Sacou em x${multiplier.toFixed(2)}! Ganhou ${Math.floor(ganho)} créditos.`);
+    updateHistory(`Saque: x${multiplier.toFixed(2)} ✅`);
+    inGame = false;
+    plane.style.transform = 'translateY(0px) rotate(0deg)';
+  }
+</script>
+</body>
+</html>
